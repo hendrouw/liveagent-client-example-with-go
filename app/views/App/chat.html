@@ -1,0 +1,275 @@
+{{set . "title" "Chat"}}
+{{template "header.html" .}}
+
+<div class="container">
+    <div class="row">
+    	<!-- chat -->
+        <div class="col-md-5">
+            <div class="panel panel-primary">
+                <div class="panel-heading">
+                    <span class="glyphicon glyphicon-comment"></span> Chat 
+                    <span id="agent-typing" style="color: black"> ...agent sedang mengetik...</span>
+                    <div class="btn-group pull-right">
+                        <button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown">
+                            <span class="glyphicon glyphicon-chevron-down"></span>
+                        </button>
+                        <ul class="dropdown-menu slidedown">
+                            <!--li><a href="http://www.jquery2dotnet.com"><span class="glyphicon glyphicon-refresh">
+                            </span>Refresh</a></li>
+                            <li><a href="http://www.jquery2dotnet.com"><span class="glyphicon glyphicon-ok-sign">
+                            </span>Available</a></li>
+                            <li><a href="http://www.jquery2dotnet.com"><span class="glyphicon glyphicon-remove">
+                            </span>Busy</a></li>
+                            <li><a href="http://www.jquery2dotnet.com"><span class="glyphicon glyphicon-time"></span>
+                                Away</a></li>
+                            <li class="divider"></li-->
+                            <li><a href="http://www.jquery2dotnet.com"><span class="glyphicon glyphicon-off"></span>
+                                End chat</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="panel-body">
+                	<ul class="prechat" id="panel-prechat">
+                		Hallowwww toppers, <br/>
+                		tolong masukan nama anda pada form dibawah ^_^
+                	</ul>
+                    <ul class="chat" id="panel-chat">                     
+                    </ul>
+                </div>
+                <div class="panel-footer">
+                    <div class="input-group">
+                        <input id="btn-input" type="text" class="form-control input-sm" placeholder="Type your message here..." />
+                        <span class="input-group-btn" id="span-chat-id">
+                            <button class="btn btn-warning btn-sm" id="btn-chat" onclick="getText()">
+                                Send</button>
+                        </span>
+                        <input id="btn-input-login" type="text" class="form-control input-sm" placeholder="Type your name here..." />
+                        <span class="input-group-btn" id="span-chat-login-id">
+                            <button class="btn btn-warning btn-sm" id="btn-chat-login" onclick="getSession()">
+                                Start Chat</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- log -->
+        <div class="col-md-7">
+        	<!--div class="form-check">
+			    <label class="form-check-label">
+			      <input type="checkbox" class="form-check-input" id="show-id" onclick="toggleLog()" value="true" />
+			      Show log
+			    </label>
+			  </div-->
+        	<ul id="log-list">       	
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+	var sessionId = '';
+	var sessionKey = '';
+	var affinityToken = '';
+	var sequence = '0';
+	var name = '';
+	var baseUrl = "http://localhost:9000/";
+	var showLog = true;
+
+	function getSession(){
+	    name = $("#btn-input-login").val();
+	    callWsSession(name);        
+	}		
+
+	function callWsSession(name){
+		var sxUrl = baseUrl+"api/chat?visitor="+name ;
+		$.ajax({ 
+			type: "GET",
+			dataType: "json",
+			url: sxUrl,
+			success: function(data){        
+				console.log(data);
+				addlog('success',JSON.stringify(data));
+				sessionId = data.id;
+				sessionKey = data.key;
+				affinityToken = data.affinityToken;
+				getMessages(sessionKey,affinityToken);
+			},
+			error: function (msg, url, line) {
+	            console.log('msg='+JSON.stringify(msg));
+	            addlog('error',JSON.stringify(msg));
+	        }	
+		});
+	}
+
+	function getText(){
+		var msg = $("#btn-input").val();
+		callWsMessage(sessionKey,affinityToken,msg,sequence);
+	}
+
+	function callWsMessage(sessionKey,affinityToken,msg,sequence){
+		var sxUrl = baseUrl+"api/chat/send";
+		//var sxData = '{"sequence":'+sequence+',"key":"'+sessionKey+'","message":"'+msg+'","affinityToken":"'+affinityToken+'"}';
+		var sxData = {"sequence":sequence,"key":sessionKey,"message":msg,"affinityToken":affinityToken};
+		$.ajax({ 
+			type: "POST",
+			dataType: "json",
+			url: sxUrl,
+			data: JSON.stringify(sxData),
+			contentType: "application/json; charset=utf-8",
+			success: function(data){        
+				console.log(data);
+				addlog('success',JSON.stringify(data));
+
+				addMsg("Customer",name,msg);
+				$("#btn-input").val("");
+			},
+			error: function (msg, url, line) {
+	            console.log('msg='+JSON.stringify(msg));
+	            addlog('error',JSON.stringify(msg));
+	        }	
+		});
+	}
+
+	function getMessages(sessionKey,affinityToken){
+		var sxUrl = baseUrl+"api/chat/messages?key="+sessionKey+"&at="+affinityToken ;
+		$.ajax({ 
+			type: "GET",
+			dataType: "json",
+			url: sxUrl,
+			success: function(data){        
+				console.log(data);
+				console.log(data.length);
+				addlog('success',JSON.stringify(data));
+				//grap value here
+				var jsonres;
+				try {
+					if( data.length > 0 ) {
+						jsonres = JSON.parse(data);
+						//if(jsonres.messages.length > 0){
+						for(var i=0;i<jsonres.messages.length;i++){
+		                	var iMsg = jsonres.messages[0];
+		                	//ChatRequestFail
+		                	if(iMsg.type == 'ChatRequestFail'){
+		                    	var sxHtml = 'Maaf tidak ada agent yang online.</br>';
+		                    	sxHtml += 'silahkan hubungi kami di <a href="https://www.tokopedia.com/contact-us">halaman bantuan.</a>';
+		                        $("#panel-prechat").html(sxHtml);
+		                    }
+		                	//ChatRequestSuccess
+		                	if(iMsg.type == 'ChatRequestSuccess'){
+		                    	var agentMsg = iMsg.message.text +''; 
+		                        var agentName = iMsg.message.name + '';
+		                        $("#panel-prechat").html("Request chat anda berhasil, silahkan menunggu antrian agent kami");
+		                        $("#btn-input-login,#span-chat-login-id").hide();
+		                        $("#btn-input,#span-chat-id,#btn-chat").show();
+		                        $("#btn-input,#btn-chat").prop('disabled', true);
+		                    }
+		                    //ChatMessage
+		                    if(iMsg.type == 'ChatMessage'){
+		                    	var agentMsg = iMsg.message.text +''; 
+		                        var agentName = iMsg.message.name + '';
+		                        $("#panel-prechat").hide();
+		                        $("#panel-chat").show();
+		                        $("#btn-input,#btn-chat").prop('disabled', false);
+		                        addMsg("Agent",agentName,agentMsg);
+		                        $("#agent-typing").hide();
+		                    }
+		                    //AgentTyping
+		                    if(iMsg.type == 'AgentTyping'){
+		                    	$("#agent-typing").show();
+		                    }
+		                }
+		                sequence = jsonres.sequence;	
+	            	} else {
+	            		$("#agent-typing").hide();
+	            	}
+				} catch (err){
+					console.log(err.message);
+	            	addlog('error',err.message);
+				} finally {
+					if(sessionKey != '') getMessages(sessionKey,affinityToken);
+				}
+			},
+			error: function (msg, url, line) {
+	            console.log('msg='+JSON.stringify(msg));
+	            addlog('error',JSON.stringify(msg));
+	            if(sessionKey != '') getMessages(sessionKey,affinityToken);
+	        }	
+		});
+	}
+
+	function addMsg(cType,cName,cMessage){
+		var dt = new Date();
+		var sxTime = dt.getHours() + ":" + dt.getMinutes() + ":" + dt.getSeconds();
+
+		var sxHtml = '';
+		if(cType == 'Agent'){
+			sxHtml += '<li class="left clearfix"><span class="chat-img pull-left">';
+	        sxHtml +='<img src="http://placehold.it/50/55C1E7/fff&text=CS" alt="User Avatar" class="img-circle" />';
+	        sxHtml +='</span>';
+    	} else if (cType == 'Customer'){
+			sxHtml += '<li class="right clearfix"><span class="chat-img pull-right">';
+	        sxHtml +='<img src="http://placehold.it/50/FA6F57/fff&text=ME" alt="User Avatar" class="img-circle" />';
+	        sxHtml +='</span>';
+		}
+        sxHtml +='<div class="chat-body clearfix">';
+        sxHtml +='<div class="header">'; 
+        if(cType == 'Agent'){
+        	sxHtml +='<strong class="primary-font">';
+        	sxHtml += cName+'</strong> ';
+        	sxHtml +='<small class="pull-right text-muted">';
+        	sxHtml +='<span class="glyphicon glyphicon-time"></span>';
+        	sxHtml += sxTime +'';
+        	sxHtml +='</small>';
+    	} else if (cType == 'Customer'){
+			sxHtml +='<small class="text-muted">';
+        	sxHtml +='<span class="glyphicon glyphicon-time"></span>';
+        	sxHtml += sxTime +'';
+        	sxHtml +='</small>';
+        	sxHtml +='<strong class="pull-right primary-font">';
+        	sxHtml += cName+'</strong> ';
+    	}        
+        sxHtml +='</div>';
+        sxHtml +='<p>';
+        sxHtml += cMessage+'';
+        sxHtml +='</p>';
+    	sxHtml +='</div>';
+        sxHtml +='</li>';
+
+		$("#panel-chat").append(sxHtml);
+	}
+
+	function addlog(type,logmessage){
+		if(showLog == true){
+		    var newLog = logmessage + "";
+		    if(type == 'error'){
+		    	var newItem = document.createElement("LI");
+		        var textnode = document.createTextNode("error:"+logmessage);
+		        newItem.appendChild(textnode);
+		    
+		        var list = document.getElementById("log-list");
+		        list.insertBefore(newItem, list.childNodes[0]);
+		    } else if(type == 'success'){            
+		    	var newItem = document.createElement("LI");
+		        var textnode = document.createTextNode("success:"+logmessage);
+		        newItem.appendChild(textnode);
+		    
+		        var list = document.getElementById("log-list");
+		        list.insertBefore(newItem, list.childNodes[0]);
+		    }
+		}
+	}
+
+	function toggleLog(){
+		var boolShow = $("#show-id").val();
+		if(boolShow == true){
+			showLog = true;
+		} else {
+			showLog = false;
+		}
+	}
+
+	$(function() {
+		$("#btn-input,#span-chat-id,#panel-chat,#agent-typing").hide();
+	});
+</script>
+{{template "footer.html" .}}
